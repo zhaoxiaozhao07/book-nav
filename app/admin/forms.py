@@ -235,9 +235,9 @@ class BackgroundForm(FlaskForm):
 
 class DataImportForm(FlaskForm):
     """数据导入表单"""
-    db_file = FileField('数据库文件', validators=[
+    db_file = FileField('数据文件', validators=[
         DataRequired(),
-        FileAllowed(['db', 'db3', 'sqlite', 'sqlite3'], '只允许上传SQLite数据库文件')
+        FileAllowed(['db', 'db3', 'sqlite', 'sqlite3', 'html', 'htm'], '只允许上传SQLite数据库文件或Chrome书签HTML文件')
     ])
     import_type = SelectField('导入类型', choices=[
         ('merge', '合并 - 保留现有数据'),

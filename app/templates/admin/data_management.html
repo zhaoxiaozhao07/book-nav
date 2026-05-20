@@ -29,12 +29,12 @@
               <i class="bi bi-box-arrow-up"></i> 数据导出
             </h5>
             <p class="card-text">
-              导出数据库可以备份所有网站链接和分类数据，导出的数据库兼容OneNav格式。
+              导出数据库可以备份所有网站链接和分类数据，也可以导出为Chrome浏览器可直接导入的书签HTML。
             </p>
 
             <div class="alert alert-info">
               <i class="bi bi-info-circle"></i>
-              导出的数据库可以在其他OneNav系统或本系统中导入使用。
+              本项目/OneNav格式用于系统迁移；Chrome HTML用于浏览器书签迁移。
             </div>
 
             <div class="mb-3">
@@ -80,10 +80,22 @@
                   >OneNav兼容格式</label
                 >
               </div>
+              <div class="form-check form-check-inline">
+                <input
+                  class="form-check-input"
+                  type="radio"
+                  name="exportFormat"
+                  id="formatChrome"
+                  value="chrome"
+                />
+                <label class="form-check-label" for="formatChrome"
+                  >Chrome书签HTML</label
+                >
+              </div>
             </div>
 
             <a href="#" id="exportBtn" class="btn btn-primary">
-              <i class="bi bi-download"></i> 导出数据库
+              <i class="bi bi-download"></i> 导出数据
             </a>
           </div>
         </div>
@@ -97,7 +109,7 @@
               <i class="bi bi-box-arrow-in-down"></i> 数据导入
             </h5>
             <p class="card-text">
-              您可以导入本系统或OneNav格式的数据库。系统会自动检测数据库格式并进行转换。
+              您可以导入本系统/OneNav数据库，也可以导入Chrome导出的HTML书签文件。系统会自动检测格式并转换。
             </p>
 
             <div class="alert alert-warning">
@@ -115,17 +127,17 @@
               {{ import_form.hidden_tag() }}
 
               <div class="mb-3">
-                <label for="db_file" class="form-label">数据库文件</label>
+                <label for="db_file" class="form-label">数据文件</label>
                 <input
                   type="file"
                   class="form-control"
                   id="db_file"
                   name="db_file"
                   required
-                  accept=".db,.db3,.sqlite,.sqlite3"
+                  accept=".db,.db3,.sqlite,.sqlite3,.html,.htm"
                 />
                 <div class="form-text">
-                  支持.db、.db3、.sqlite、.sqlite3格式
+                  支持.db、.db3、.sqlite、.sqlite3、.html、.htm格式
                 </div>
               </div>
 
@@ -375,6 +387,7 @@
     <ul>
       <li><strong>本系统格式</strong> - 直接导入本系统导出的数据库文件</li>
       <li><strong>OneNav格式</strong> - 支持导入OneNav导航系统的数据库文件</li>
+      <li><strong>Chrome书签HTML</strong> - 支持Chrome/Edge等浏览器导出的Netscape Bookmark HTML文件</li>
     </ul>
 
     <h5>OneNav兼容说明</h5>
@@ -387,10 +400,18 @@
       <li>点击量统计</li>
     </ul>
 
+    <h5>Chrome书签兼容说明</h5>
+    <p>系统会识别浏览器书签HTML中的文件夹和链接：</p>
+    <ul>
+      <li>文件夹会转换为分类，并尽量保留嵌套层级</li>
+      <li>书签链接会转换为网站，保留标题、URL、创建时间和可用图标</li>
+      <li>合并模式会跳过重复URL，替换模式会先备份再清空现有分类和链接</li>
+    </ul>
+
     <div class="alert alert-info">
       <i class="bi bi-lightbulb"></i>
       <strong>提示：</strong>
-      导出的数据库同样可以导入到OneNav系统中，实现双向兼容。
+      导出的数据库可以导入到OneNav系统；导出的Chrome书签HTML可以在Chrome浏览器书签管理器中导入。
     </div>
   </div>
 </div>
@@ -518,11 +539,11 @@
       const fileExt = fileName
         .substring(fileName.lastIndexOf("."))
         .toLowerCase();
-      const validExtensions = [".db", ".db3", ".sqlite", ".sqlite3"];
+      const validExtensions = [".db", ".db3", ".sqlite", ".sqlite3", ".html", ".htm"];
 
       if (!validExtensions.includes(fileExt)) {
         e.preventDefault();
-        alert("请选择有效的SQLite数据库文件 (.db, .db3, .sqlite, .sqlite3)");
+        alert("请选择有效的数据文件 (.db, .db3, .sqlite, .sqlite3, .html, .htm)");
         return false;
       }
 
@@ -542,10 +563,10 @@
         const fileExt = fileName
           .substring(fileName.lastIndexOf("."))
           .toLowerCase();
-        const validExtensions = [".db", ".db3", ".sqlite", ".sqlite3"];
+        const validExtensions = [".db", ".db3", ".sqlite", ".sqlite3", ".html", ".htm"];
 
         if (!validExtensions.includes(fileExt)) {
-          alert("请选择有效的SQLite数据库文件 (.db, .db3, .sqlite, .sqlite3)");
+          alert("请选择有效的数据文件 (.db, .db3, .sqlite, .sqlite3, .html, .htm)");
           this.value = ""; // 清空选择
         }
       }

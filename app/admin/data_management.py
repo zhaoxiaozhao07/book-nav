@@ -7,6 +7,8 @@ import io
 import shutil
 import sqlite3
 import tempfile
+from html import escape
+from html.parser import HTMLParser
 from datetime import datetime
 from flask import render_template, redirect, url_for, flash, request, send_file, current_app
 from flask_login import login_required, current_user
@@ -36,6 +38,15 @@ def export_data():
     
     # 确定时间戳
     timestamp = datetime.now().strftime('%Y%m%d%H%M')
+    if export_format == 'chrome':
+        html_data = export_chrome_bookmarks_html().encode('utf-8')
+        return send_file(
+            io.BytesIO(html_data),
+            as_attachment=True,
+            download_name=f"booknav_chrome_bookmarks_{timestamp}.html",
+            mimetype='text/html; charset=utf-8'
+        )
+
     if export_format == 'onenav':
         filename = f"booknav_export_onenav_{timestamp}.db3"
     else:
@@ -161,9 +172,22 @@ def import_data():
                 except Exception as e:
                     flash(f'导入过程中发生错误: {str(e)}', 'danger')
                     current_app.logger.error(f"导入错误: {str(e)}")
+            elif is_chrome_bookmarks_html(temp_db_path):
+                current_app.logger.info("检测到Chrome书签HTML格式")
+                try:
+                    results = import_chrome_bookmarks_html(temp_db_path, import_type, current_user.id)
+                    flash(
+                        f'Chrome书签导入成功! {results["cats_count"]}个分类, '
+                        f'{results["links_count"]}个链接, 跳过{results["skipped_count"]}个重复或无效链接',
+                        'success'
+                    )
+                except Exception as e:
+                    db.session.rollback()
+                    flash(f'Chrome书签导入失败: {str(e)}', 'danger')
+                    current_app.logger.error(f"Chrome书签导入错误: {str(e)}")
             else:
                 # 如果格式无法识别
-                flash('无法识别的数据库格式', 'danger')
+                flash('无法识别的数据格式，请上传本项目/OneNav数据库或Chrome书签HTML文件', 'danger')
                 
             # 删除临时文件
             os.unlink(temp_db_path)
@@ -257,6 +281,300 @@ def clear_all_data():
         db.session.rollback()
         current_app.logger.error(f"清空所有数据失败: {str(e)}")
         return jsonify({'success': False, 'message': f'操作失败: {str(e)}'})
+
+
+class ChromeBookmarkHTMLParser(HTMLParser):
+    """解析Chrome/Netscape书签HTML中的文件夹和链接结构。"""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.root = []
+        self.stack = [self.root]
+        self.capture_tag = None
+        self.capture_attrs = {}
+        self.capture_data = []
+        self.pending_folder = None
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        attrs_dict = {key.upper(): value for key, value in attrs}
+
+        if tag in {'h3', 'a'}:
+            self.capture_tag = tag
+            self.capture_attrs = attrs_dict
+            self.capture_data = []
+            return
+
+        if tag == 'dl' and self.pending_folder is not None:
+            self.stack.append(self.pending_folder['children'])
+            self.pending_folder = None
+
+    def handle_data(self, data):
+        if self.capture_tag:
+            self.capture_data.append(data)
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+
+        if tag == self.capture_tag:
+            title = ''.join(self.capture_data).strip()
+            if self.capture_tag == 'h3' and title:
+                folder = {
+                    'type': 'folder',
+                    'title': title,
+                    'attrs': self.capture_attrs,
+                    'children': []
+                }
+                self.stack[-1].append(folder)
+                self.pending_folder = folder
+            elif self.capture_tag == 'a':
+                href = (self.capture_attrs.get('HREF') or '').strip()
+                if title and href:
+                    self.stack[-1].append({
+                        'type': 'bookmark',
+                        'title': title,
+                        'url': href,
+                        'attrs': self.capture_attrs
+                    })
+
+            self.capture_tag = None
+            self.capture_attrs = {}
+            self.capture_data = []
+            return
+
+        if tag == 'dl' and len(self.stack) > 1:
+            self.stack.pop()
+
+
+def read_text_file(file_path):
+    """用常见书签编码读取文本文件。"""
+    with open(file_path, 'rb') as file:
+        data = file.read()
+
+    for encoding in ('utf-8-sig', 'utf-8', 'gb18030', 'latin-1'):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+
+    return data.decode('utf-8', errors='replace')
+
+
+def is_chrome_bookmarks_html(file_path):
+    """检查是否为Chrome/Netscape书签HTML文件。"""
+    try:
+        content = read_text_file(file_path)[:8192].lower()
+        return (
+            'netscape-bookmark-file-1' in content or
+            ('<dl' in content and '<a ' in content and 'href=' in content and '<h3' in content)
+        )
+    except Exception:
+        return False
+
+
+def parse_chrome_timestamp(value):
+    try:
+        timestamp = int(value)
+        if 0 < timestamp < (1 << 32):
+            return datetime.fromtimestamp(timestamp)
+    except (TypeError, ValueError, OSError, OverflowError):
+        pass
+    return datetime.now()
+
+
+def safe_icon_value(value):
+    if not value:
+        return ''
+    value = value.strip()
+    if len(value) > 256:
+        return ''
+    if value.startswith(('http://', 'https://', '/')):
+        return value
+    return ''
+
+
+def normalize_url(value):
+    return (value or '').strip()
+
+
+def import_chrome_bookmarks_html(file_path, import_type, admin_id):
+    """导入Chrome/Netscape书签HTML。"""
+    content = read_text_file(file_path)
+    parser = ChromeBookmarkHTMLParser()
+    parser.feed(content)
+
+    if import_type == "replace":
+        Website.query.delete()
+        Category.query.delete()
+        db.session.commit()
+
+    results = {"cats_count": 0, "links_count": 0, "skipped_count": 0}
+    existing_urls = {w.url.lower(): True for w in Website.query.all()} if import_type == "merge" else {}
+    category_cache = {
+        (category.parent_id, category.name.lower()): category
+        for category in Category.query.all()
+    }
+
+    fallback_category = None
+
+    def get_or_create_category(title, parent_id=None, order=0):
+        nonlocal category_cache
+        title = (title or '未分类书签').strip()[:64]
+        cache_key = (parent_id, title.lower())
+        if import_type == "merge" and cache_key in category_cache:
+            return category_cache[cache_key]
+
+        category = Category(
+            name=title,
+            description='从Chrome书签HTML导入',
+            icon='folder',
+            color='#2563eb',
+            order=order,
+            parent_id=parent_id
+        )
+        db.session.add(category)
+        db.session.flush()
+        category_cache[cache_key] = category
+        results["cats_count"] += 1
+        return category
+
+    def import_nodes(nodes, parent_category=None, depth=0):
+        nonlocal fallback_category
+        for index, node in enumerate(nodes):
+            sort_order = max(0, 10000 - index)
+            if node['type'] == 'folder':
+                category_parent_id = parent_category.id if parent_category else None
+                category = get_or_create_category(node['title'], category_parent_id, sort_order)
+                import_nodes(node['children'], category, depth + 1)
+                continue
+
+            url = normalize_url(node.get('url'))
+            if not url or not url.lower().startswith(('http://', 'https://')):
+                results["skipped_count"] += 1
+                continue
+
+            url_lower = url.lower()
+            if import_type == "merge" and url_lower in existing_urls:
+                results["skipped_count"] += 1
+                continue
+
+            category = parent_category
+            if category is None:
+                if fallback_category is None:
+                    fallback_category = get_or_create_category('Chrome书签', None, 0)
+                category = fallback_category
+
+            attrs = node.get('attrs', {})
+            website = Website(
+                title=node['title'][:128],
+                url=url[:256],
+                description=(attrs.get('DESCRIPTION') or '').strip()[:512],
+                icon=safe_icon_value(attrs.get('ICON') or attrs.get('ICON_URI')),
+                category_id=category.id,
+                created_by_id=admin_id,
+                created_at=parse_chrome_timestamp(attrs.get('ADD_DATE')),
+                sort_order=sort_order,
+                is_private=False,
+                views=0
+            )
+            db.session.add(website)
+            existing_urls[url_lower] = True
+            results["links_count"] += 1
+
+            if results["links_count"] % 100 == 0:
+                db.session.commit()
+
+    import_nodes(parser.root)
+    db.session.commit()
+    return results
+
+
+def chrome_timestamp(value):
+    if isinstance(value, datetime):
+        return str(int(value.timestamp()))
+    return str(int(datetime.now().timestamp()))
+
+
+def export_chrome_bookmarks_html():
+    """导出为Chrome兼容的Netscape Bookmark HTML。"""
+    now_ts = str(int(datetime.now().timestamp()))
+    categories = sorted(
+        Category.query.all(),
+        key=lambda category: (
+            category.parent_id is not None,
+            category.parent_id or 0,
+            -(category.order or 0),
+            category.name or ''
+        )
+    )
+    websites = sorted(
+        Website.query.all(),
+        key=lambda website: (
+            website.category_id is not None,
+            website.category_id or 0,
+            -(website.sort_order or 0),
+            website.title or ''
+        )
+    )
+
+    children_by_parent = {}
+    for category in categories:
+        children_by_parent.setdefault(category.parent_id, []).append(category)
+
+    websites_by_category = {}
+    for website in websites:
+        websites_by_category.setdefault(website.category_id, []).append(website)
+
+    lines = [
+        '<!DOCTYPE NETSCAPE-Bookmark-file-1>',
+        '<!-- This is an automatically generated file.',
+        '     It will be read and overwritten by browser bookmark managers.',
+        '     Do Not Edit! -->',
+        '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">',
+        '<TITLE>Bookmarks</TITLE>',
+        '<H1>Bookmarks</H1>',
+        '<DL><p>'
+    ]
+
+    def append_website(website, indent):
+        attrs = [
+            f'HREF="{escape(website.url or "", quote=True)}"',
+            f'ADD_DATE="{chrome_timestamp(website.created_at)}"'
+        ]
+        icon = safe_icon_value(website.icon)
+        if icon:
+            attrs.append(f'ICON="{escape(icon, quote=True)}"')
+        lines.append(
+            f'{indent}<DT><A {" ".join(attrs)}>{escape(website.title or website.url or "未命名链接")}</A>'
+        )
+
+    def append_category(category, depth=1):
+        indent = '    ' * depth
+        title = escape(category.name or '未分类')
+        lines.append(
+            f'{indent}<DT><H3 ADD_DATE="{chrome_timestamp(category.created_at)}" '
+            f'LAST_MODIFIED="{now_ts}">{title}</H3>'
+        )
+        lines.append(f'{indent}<DL><p>')
+        for child in children_by_parent.get(category.id, []):
+            append_category(child, depth + 1)
+        for website in websites_by_category.get(category.id, []):
+            append_website(website, '    ' * (depth + 1))
+        lines.append(f'{indent}</DL><p>')
+
+    for category in children_by_parent.get(None, []):
+        append_category(category)
+
+    root_websites = websites_by_category.get(None, [])
+    if root_websites:
+        lines.append(f'    <DT><H3 ADD_DATE="{now_ts}" LAST_MODIFIED="{now_ts}">未分类</H3>')
+        lines.append('    <DL><p>')
+        for website in root_websites:
+            append_website(website, '        ')
+        lines.append('    </DL><p>')
+
+    lines.append('</DL><p>')
+    return '\n'.join(lines) + '\n'
 
 
 def import_onenav_direct(db_path, import_type, admin_id):

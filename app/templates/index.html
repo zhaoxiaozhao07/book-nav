@@ -70,6 +70,10 @@ head %}
   rel="stylesheet"
   href="{{ url_for('static', filename='css/contextMenu.css') }}"
 />
+<link
+  rel="stylesheet"
+  href="{{ url_for('static', filename='css/home-redesign.css') }}"
+/>
 {% endblock %} {% block content %} {# 顶部导航栏 #} {% include
 'common/navbar.html' %} {# 遮罩层 #}
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
@@ -93,7 +97,7 @@ head %}
             <span class="category-children-count"
               >{{ category.children_list|length }}</span
             >
-            <button class="submenu-toggle" tabindex="-1" aria-label="展开/收起">
+            <button type="button" class="submenu-toggle" tabindex="-1" aria-label="展开/收起">
               <svg viewBox="0 0 24 24">
                 <polyline points="6 9 12 15 18 9" />
               </svg>
@@ -138,7 +142,7 @@ head %}
             id="searchInput"
             class="main-search-input"
             data-bwignore="true"
-            placeholder="请输入关键字搜索网站"
+            placeholder="搜索书签"
             autocomplete="off"
           />
           {% if frontend_ai_search_available %}
@@ -318,6 +322,25 @@ head %}
       </div>
       {% endif %} {% endfor %}
     </div>
+  </div>
+
+  <div class="front-floating-actions" aria-label="页面快捷操作">
+    {% if current_user.is_authenticated and current_user.is_admin %}
+    <a
+      href="{{ url_for('admin.add_website') }}"
+      class="front-fab"
+      title="添加链接"
+      aria-label="添加链接"
+    >
+      <i class="bi bi-plus-lg"></i>
+    </a>
+    {% endif %}
+    <button type="button" class="front-fab" title="刷新页面" aria-label="刷新页面" onclick="window.location.reload()">
+      <i class="bi bi-arrow-clockwise"></i>
+    </button>
+    <button type="button" class="front-fab" title="回到顶部" aria-label="回到顶部" onclick="window.scrollTo({ top: 0, behavior: 'smooth' })">
+      <i class="bi bi-arrow-up"></i>
+    </button>
   </div>
 
   {# 快速添加链接对话框 #} {% if current_user.is_authenticated and
@@ -550,7 +573,7 @@ head %}
   <div class="edit-modal">
     <div class="modal-header">
       <h5><i class="bi bi-pencil me-2"></i>修改链接</h5>
-      <button class="modal-close" id="closeModal">
+      <button type="button" class="modal-close" id="closeModal">
         <i class="bi bi-x"></i>
       </button>
     </div>
@@ -739,7 +762,7 @@ head %}
       style="background: linear-gradient(to right, #ff9800, #f44336)"
     >
       <h5><i class="bi bi-exclamation-triangle me-2"></i>链接已存在</h5>
-      <button class="modal-close" id="closeDuplicateModal">
+      <button type="button" class="modal-close" id="closeDuplicateModal">
         <i class="bi bi-x"></i>
       </button>
     </div>

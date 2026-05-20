@@ -21,6 +21,7 @@ wheels/
 *.egg
 
 # Virtual Environment
+.venv
 venv/
 ENV/
 env/
@@ -91,6 +92,7 @@ coverage.xml
 .env.development.local
 .env.test.local
 .env.production.local
+.opencode
 
 # Reference projects (excluded from git)
 PixelPunk/

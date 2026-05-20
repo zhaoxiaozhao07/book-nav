@@ -1,0 +1,164 @@
+/* 登录/注册页视觉统一：延续首页浅色极简导航站风格。 */
+
+.auth-page {
+  background: #ffffff !important;
+  color: #1f2937;
+}
+
+.auth-page main {
+  min-height: calc(100vh - var(--navbar-height, 64px));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 44px 16px;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(37, 99, 235, 0.07), transparent 30%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.auth-page .login-container,
+.auth-page .register-container {
+  width: min(100%, 520px);
+  margin: 0 auto !important;
+  overflow: hidden;
+  border: 1px solid #eef2f7;
+  border-radius: 24px !important;
+  background: #ffffff !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.1) !important;
+}
+
+.auth-page .register-container {
+  width: min(100%, 620px);
+}
+
+.auth-page .login-header,
+.auth-page .register-header {
+  padding: 34px 34px 24px !important;
+  background: #ffffff !important;
+  color: #1f2937 !important;
+  border-bottom: 1px solid #eef2f7;
+  text-align: left !important;
+}
+
+.auth-page .login-header h2,
+.auth-page .register-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 10px;
+  color: #111827;
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+}
+
+.auth-page .login-header h2 i,
+.auth-page .register-header h2 i {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+  border-radius: 50%;
+  background: #eef4ff;
+  color: #2563eb;
+  font-size: 1.1rem;
+}
+
+.auth-page .login-header p,
+.auth-page .register-header p {
+  color: #64748b;
+  font-size: 0.95rem;
+}
+
+.auth-page .login-body,
+.auth-page .register-body {
+  padding: 30px 34px 34px !important;
+}
+
+.auth-page .form-label {
+  color: #334155;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.auth-page .form-control {
+  min-height: 48px;
+  border: 1px solid #e5eaf2;
+  border-radius: 14px !important;
+  color: #111827;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.auth-page .form-control:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.13) !important;
+}
+
+.auth-page .form-text,
+.auth-page .text-muted {
+  color: #94a3b8 !important;
+}
+
+.auth-page .form-check-input:checked {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+.auth-page .btn-primary {
+  min-height: 48px;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #2563eb !important;
+  box-shadow: none !important;
+  font-weight: 700;
+}
+
+.auth-page .btn-primary:hover {
+  background: #1d4ed8 !important;
+}
+
+.auth-page .btn-outline-primary {
+  border-color: #bfdbfe;
+  border-radius: 999px;
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.auth-page .btn-outline-primary:hover,
+.auth-page a:not(.btn):hover {
+  color: #1d4ed8;
+}
+
+.auth-page a:not(.btn) {
+  color: #2563eb;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (max-width: 576px) {
+  .auth-page main {
+    align-items: flex-start;
+    padding: 24px 12px;
+  }
+
+  .auth-page .login-header,
+  .auth-page .register-header,
+  .auth-page .login-body,
+  .auth-page .register-body {
+    padding-left: 22px !important;
+    padding-right: 22px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-page *,
+  .auth-page *::before,
+  .auth-page *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
