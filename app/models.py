@@ -1,4 +1,5 @@
 ﻿from datetime import datetime
+import secrets
 import json
 import random
 import string
@@ -25,6 +26,10 @@ class User(UserMixin, db.Model):
     is_admin = db.Column(db.Boolean, default=False)
     is_superadmin = db.Column(db.Boolean, default=False)  # 瓒呯骇绠＄悊鍛樻爣璇?
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    extension_token_hash = db.Column(db.String(255), nullable=True)
+    extension_token_prefix = db.Column(db.String(16), index=True, nullable=True)
+    extension_token_created_at = db.Column(db.DateTime, nullable=True)
+    extension_token_last_used_at = db.Column(db.DateTime, nullable=True)
     websites = db.relationship('Website', backref='creator', lazy='dynamic')
     
     def __repr__(self):
@@ -35,6 +40,50 @@ class User(UserMixin, db.Model):
     
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    def issue_extension_api_token(self):
+        """Create a new personal API token for the Chrome extension.
+
+        The raw token is returned once and only its hash is stored.
+        """
+        while True:
+            prefix = secrets.token_hex(4)
+            existing = User.query.filter(
+                User.id != self.id,
+                User.extension_token_prefix == prefix
+            ).first()
+            if not existing:
+                break
+
+        token = f"bn_{prefix}_{secrets.token_urlsafe(32)}"
+        self.extension_token_prefix = prefix
+        self.extension_token_hash = generate_password_hash(token)
+        self.extension_token_created_at = datetime.utcnow()
+        self.extension_token_last_used_at = None
+        return token
+
+    def clear_extension_api_token(self):
+        self.extension_token_hash = None
+        self.extension_token_prefix = None
+        self.extension_token_created_at = None
+        self.extension_token_last_used_at = None
+
+    def check_extension_api_token(self, token):
+        if not token or not self.extension_token_hash:
+            return False
+        return check_password_hash(self.extension_token_hash, token)
+
+    @classmethod
+    def verify_extension_api_token(cls, token):
+        if not token or not token.startswith('bn_'):
+            return None
+        parts = token.split('_', 2)
+        if len(parts) != 3 or not parts[1] or not parts[2]:
+            return None
+        user = cls.query.filter_by(extension_token_prefix=parts[1]).first()
+        if user and user.check_extension_api_token(token):
+            return user
+        return None
 
 
 @login_manager.user_loader

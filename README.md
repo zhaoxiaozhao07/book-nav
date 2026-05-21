@@ -8,6 +8,10 @@ BookNav 是一个使用 Flask 构建的、可通过 Docker 轻松部署的个人
 
 ![批量抓取链接图标](./img/图标信息获取.png)
 
+![书签插件](./img/书签插件.png)
+
+![书签插件设置](./img/书签插件设置.png)
+
 ## ✨ 特色功能
 
 BookNav 基于 Flask Web 框架打造，提供了以下核心功能：
@@ -19,6 +23,10 @@ BookNav 基于 Flask Web 框架打造，提供了以下核心功能：
 - **🤏 拖拽排序功能**:
   - 支持网站卡片拖拽排序
   - 支持侧边栏分类拖拽排序
+- **🔖 Chrome 书签助手**:
+  - 配套 Manifest V3 Chrome 扩展，快速把当前页面保存到 BookNav
+  - 使用后台生成的用户级 API Token 配对，新增书签自动归属当前用户
+  - 可配置 OpenAI 兼容模型推荐已有分类，AI 不会创建新分类
 - **🔄 重复链接验证功能**:
   - 在添加或编辑网站时自动检测 URL 是否已存在
   - 智能提示已存在的链接及其所属分类
@@ -225,6 +233,29 @@ docker-compose up -d
 
 用户名和密码为.env 文件中自定义填写的
 
+### Chrome 扩展部署说明
+
+`booknav-extension/` 是客户端 Chrome 扩展源码，不需要复制到 Docker 服务端镜像，也不需要在 `docker-compose.yml` 中挂载。
+
+服务端部署只需要确保镜像包含扩展 API 和 Token 管理功能。使用源码构建时执行：
+
+```bash
+docker-compose build
+docker-compose up -d
+```
+
+如果使用 `docker-compose.prod.yml`，请确认 `yilan666/booknav-nav:latest` 或你指定的镜像版本已经包含当前扩展 API；生产 compose 使用预构建镜像，本地源码改动不会自动进入容器。
+
+扩展安装与配对流程：
+
+1. 登录 BookNav 后台。
+2. 进入“Chrome 插件”页面生成 API Token。
+3. 在 Chrome / Edge 的 `chrome://extensions/` 中启用开发者模式。
+4. 选择仓库中的 `booknav-extension/` 作为“已解压的扩展程序”加载。
+5. 在扩展设置中填写 BookNav 服务地址，例如 `https://your-domain.example`，并粘贴 API Token。
+
+生产环境建议使用 HTTPS，避免 API Token 在明文 HTTP 中传输。
+
 ### 数据库初始化
 
 首次启动时，容器内的 `entrypoint.sh` 脚本会自动:
@@ -352,6 +383,7 @@ docker-compose up -d
 │   ├── nginx.conf        # Nginx 配置文件
 │   └── supervisord.conf  # Supervisor 配置文件
 ├── migrations/           # Flask-Migrate 数据库迁移脚本
+├── booknav-extension/    # Chrome 扩展源码，客户端加载，不进入服务端镜像
 ├── config/               # Nginx 配置目录 (本地映射)
 ├── data/                 # 持久化数据目录 (本地映射)
 ├── .env                  # 环境变量文件

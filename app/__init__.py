@@ -106,7 +106,7 @@ def create_app(config_class=Config):
         db.create_all()
         # 数据库字段迁移（确保新字段自动添加）
         try:
-            from app.utils.db_migration import migrate_ai_provider_config_table, migrate_site_settings_fields, migrate_webdav_config_table
+            from app.utils.db_migration import migrate_ai_provider_config_table, migrate_site_settings_fields, migrate_user_extension_token_fields, migrate_webdav_config_table
             from app.utils.icon_db_migration import migrate_icon_management_tables
             import os
             db_path = app.config.get('SQLALCHEMY_DATABASE_URI', '').replace('sqlite:///', '')
@@ -114,6 +114,7 @@ def create_app(config_class=Config):
                 migrate_site_settings_fields(db_path)
                 migrated = migrate_webdav_config_table(db_path)
                 migrate_ai_provider_config_table(db_path)
+                migrate_user_extension_token_fields(db_path)
                 migrate_icon_management_tables(db_path)
                 if migrated > 0:
                     print(f"已将旧 WebDAV 配置迁移到 webdav_config 表（{migrated} 条）")

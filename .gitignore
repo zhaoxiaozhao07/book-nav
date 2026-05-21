@@ -1,11 +1,10 @@
-# Python
+# Python bytecode / build output
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
 build/
-develop-eggs/
 dist/
 downloads/
 eggs/
@@ -20,81 +19,87 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual Environment
-.venv
+# Virtual environments
+.venv/
 venv/
 ENV/
 env/
-.env
 
-# IDE
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+.flaskenv
+instance/
+
+# IDE / OS files
 .idea/
 .vscode/
 *.swp
 *.swo
 .DS_Store
+Thumbs.db
+desktop.ini
 
-# Flask
-instance/
+# Flask/runtime cache
 .webassets-cache
 flask_session/
 
-# Database
+# Databases and runtime data
 data/
 *.db
 *.db-shm
 *.db-wal
 *.sqlite
 *.sqlite3
-
-# Backups
-app/backups/
-
-# Qdrant data
-data/qdrant/
 qdrant_storage/
 
-# Logs
+# Backups and uploads
+app/backups/
+app/static/uploads/
+
+# Logs and temporary files
 *.log
 logs/
-
-# Uploads
-app/static/uploads/
-app/static/uploads/avatars/
-app/static/uploads/backgrounds/
-app/static/uploads/favicons/
-app/static/uploads/logos/
-
-# Temporary files
 *.tmp
 *.bak
-*.swp
 *~
 .webdav_auto_backup_scheduler.lock
 
-# Coverage reports
+# Test / coverage output
 htmlcov/
 .tox/
 .coverage
 .coverage.*
-.cache
+.cache/
+.pytest_cache/
 nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
+/tests/
 
 # Translations
 *.mo
 *.pot
 
-# Local development settings
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.opencode
+# Local agent/tooling state
+.opencode/
+.claude/
 
-# Reference projects (excluded from git)
+# Reference projects not shipped with BookNav
 PixelPunk/
+bookmarktool/
 
-/tests/
+# Chrome extension local build artifacts / secrets
+!booknav-extension/lib/
+!booknav-extension/lib/**
+booknav-extension/dist/
+booknav-extension/build/
+booknav-extension/*.zip
+booknav-extension/*.crx
+booknav-extension/*.pem
+booknav-extension/key.pem
+booknav-extension/.env
+booknav-extension/.env.*
+booknav-extension/node_modules/

@@ -75,8 +75,10 @@ docker-compose.override.yml
 docs/
 img/
 
-# 参考项目（不需要在镜像中）
+# 参考项目和客户端扩展（不需要在服务端镜像中）
 PixelPunk/
+bookmarktool/
+booknav-extension/
 config/
 
 # 测试和开发脚本（运行时不需要）
@@ -89,4 +91,4 @@ start_qdrant.bat
 stop_qdrant.bat
 
 # 数据库迁移（Docker部署使用 db.create_all()，不需要 migrations）
-migrations/ 
+migrations/

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>插件设置</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="options-shell">
+      <header class="options-header">
+        <div>
+          <p class="eyebrow">Bookmark Extension</p>
+          <h1>插件设置</h1>
+          <p>配置后台配对 Token 和 AI 分类推荐。AI 只能选择已有分类，新分类请到后台创建。</p>
+        </div>
+      </header>
+
+      <section class="settings-grid">
+        <article class="card">
+          <div class="card-header">
+            <h2>服务配对</h2>
+            <span class="badge" id="pairStatus">未连接</span>
+          </div>
+          <label class="field">
+            <span>服务地址</span>
+            <input id="baseUrlInput" type="url" placeholder="https://nav.example.com" />
+          </label>
+          <label class="field">
+            <span>API Token</span>
+            <input id="tokenInput" type="password" placeholder="在后台 Chrome 插件页面生成" />
+          </label>
+          <div class="button-row">
+            <button class="primary-button" id="saveBooknavBtn" type="button">保存并测试</button>
+            <button class="ghost-button" id="syncCategoriesBtn" type="button">同步分类</button>
+            <button class="danger-button" id="clearTokenBtn" type="button">清除 Token</button>
+          </div>
+          <div class="info-box" id="booknavInfo">请在后台生成当前用户的 API Token。</div>
+        </article>
+
+        <article class="card">
+          <div class="card-header">
+            <h2>AI 提供商</h2>
+            <span class="badge" id="aiStatus">未配置</span>
+          </div>
+          <label class="field">
+            <span>提供商名称</span>
+            <input id="providerNameInput" type="text" placeholder="OpenAI / 私有部署" />
+          </label>
+          <label class="field">
+            <span>Base URL</span>
+            <input id="providerBaseUrlInput" type="url" placeholder="https://api.openai.com" />
+          </label>
+          <label class="field">
+            <span>API Key</span>
+            <input id="providerApiKeyInput" type="password" placeholder="sk-..." />
+          </label>
+          <div class="button-row">
+            <button class="primary-button" id="saveProviderBtn" type="button">保存提供商</button>
+            <button class="ghost-button" id="fetchModelsBtn" type="button">获取模型</button>
+          </div>
+          <label class="field">
+            <span>当前模型</span>
+            <select id="modelSelect"><option value="">请先添加模型</option></select>
+          </label>
+          <div class="button-row">
+            <input id="manualModelInput" type="text" placeholder="手动输入模型名" />
+            <button class="ghost-button" id="addModelBtn" type="button">添加模型</button>
+            <button class="ghost-button" id="testModelBtn" type="button">测试模型</button>
+          </div>
+        </article>
+
+        <article class="card full-card">
+          <div class="card-header">
+            <h2>AI 分类与描述提示词</h2>
+            <span class="badge">分类 + 描述</span>
+          </div>
+          <textarea id="promptInput" rows="12"></textarea>
+          <div class="button-row">
+            <button class="primary-button" id="savePromptBtn" type="button">保存提示词</button>
+            <button class="ghost-button" id="resetPromptBtn" type="button">恢复默认</button>
+          </div>
+        </article>
+      </section>
+
+      <div class="toast hidden" id="toast"></div>
+    </main>
+
+    <script src="lib/storage.js"></script>
+    <script src="lib/booknav.js"></script>
+    <script src="lib/ai.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

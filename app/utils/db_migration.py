@@ -6,6 +6,42 @@ import sqlite3
 from typing import List, Tuple
 
 
+def migrate_user_extension_token_fields(db_path: str) -> int:
+    """Add Chrome extension token fields to the user table for legacy SQLite deployments."""
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+
+        cursor.execute("PRAGMA table_info(user)")
+        columns = [column[1] for column in cursor.fetchall()]
+        fields = [
+            ('extension_token_hash', 'VARCHAR(255)'),
+            ('extension_token_prefix', 'VARCHAR(16)'),
+            ('extension_token_created_at', 'DATETIME'),
+            ('extension_token_last_used_at', 'DATETIME'),
+        ]
+
+        added_count = 0
+        for field_name, field_def in fields:
+            if field_name not in columns:
+                try:
+                    cursor.execute(f"ALTER TABLE user ADD COLUMN {field_name} {field_def}")
+                    added_count += 1
+                except sqlite3.Error:
+                    pass
+
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_user_extension_token_prefix "
+            "ON user (extension_token_prefix)"
+        )
+
+        conn.commit()
+        conn.close()
+        return added_count
+    except Exception:
+        return 0
+
+
 def migrate_webdav_config_table(db_path: str) -> int:
     """
     创建 webdav_config 表（如果不存在），并从 site_settings 迁移旧数据

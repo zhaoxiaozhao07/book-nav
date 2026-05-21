@@ -5,7 +5,7 @@
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import requests
 from flask import current_app, has_app_context
@@ -99,6 +99,10 @@ AI_INTERFACE_MODE_VALUES = {
 
 AI_REQUEST_TIMEOUT = (15, 60)
 AI_STREAM_REQUEST_TIMEOUT = (15, 90)
+AI_SSE_EVENT_MAX_BYTES = 1024 * 1024
+AI_STREAM_TEXT_MAX_CHARS = 1024 * 1024
+AI_STREAM_CONTENT_MAX_DEPTH = 32
+AI_STREAM_CONTENT_MAX_NODES = 5000
 
 
 def _get_logger():
@@ -222,8 +226,8 @@ class AISearchService:
     def _call_api(
         self,
         messages: List[dict],
-        temperature: float = None,
-        max_tokens: int = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
         expect_json: bool = False,
     ) -> dict:
         chat_data = {
@@ -389,36 +393,96 @@ class AISearchService:
         return preview.startswith("data:") or preview.startswith("event:")
 
     def _iter_sse_payloads(self, response: requests.Response):
+        event_type = ""
+        data_lines: List[str] = []
+        data_size = 0
+
+        def append_data_line(value: str) -> None:
+            nonlocal data_size
+            line_size = len(value.encode("utf-8", errors="replace"))
+            separator_size = 1 if data_lines else 0
+            if data_size + separator_size + line_size > AI_SSE_EVENT_MAX_BYTES:
+                raise AICompatibilityError("AI 流式返回单个事件过大，已停止解析")
+            data_lines.append(value)
+            data_size += separator_size + line_size
+
+        def flush_event():
+            nonlocal event_type, data_lines, data_size
+            data = "\n".join(data_lines).strip()
+            current_event_type = event_type
+            event_type = ""
+            data_lines = []
+            data_size = 0
+            if not data:
+                return None, False
+            if data == "[DONE]":
+                return None, True
+
+            try:
+                payload = json.loads(data)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return None, False
+
+            if not isinstance(payload, dict):
+                return None, False
+            if current_event_type and not payload.get("type"):
+                payload = dict(payload)
+                payload["type"] = current_event_type
+            return payload, False
+
         for raw_line in response.iter_lines(decode_unicode=True):
             if raw_line is None:
                 continue
-            line = raw_line.strip()
-            if not line or line.startswith(":"):
-                continue
-            if line.startswith("event:"):
-                continue
-            if line.startswith("data:"):
-                line = line[5:].strip()
+            if isinstance(raw_line, bytes):
+                raw_line = raw_line.decode("utf-8", errors="replace")
+
+            line = str(raw_line).rstrip("\r")
             if not line:
-                continue
-            if line == "[DONE]":
-                break
-
-            try:
-                payload = json.loads(line)
-            except (TypeError, ValueError, json.JSONDecodeError):
+                payload, should_stop = flush_event()
+                if payload is not None:
+                    yield payload
+                if should_stop:
+                    break
                 continue
 
-            if isinstance(payload, dict):
+            stripped = line.strip()
+            if not stripped or stripped.startswith(":"):
+                continue
+
+            field, separator, value = line.partition(":")
+            if separator:
+                if value.startswith(" "):
+                    value = value[1:]
+                if field == "event":
+                    event_type = value
+                    continue
+                if field == "data":
+                    append_data_line(value)
+                    continue
+
+            if not data_lines and stripped[:1] in ("{", "["):
+                append_data_line(stripped)
+
+        if data_lines:
+            payload, _ = flush_event()
+            if payload is not None:
                 yield payload
 
     def _parse_chat_sse_response(self, response: requests.Response) -> dict:
         text_parts: List[str] = []
+        diagnostics: List[str] = []
+        text_size = 0
         has_event_payload = False
 
         for payload in self._iter_sse_payloads(response):
             has_event_payload = True
-            text_parts.extend(self._extract_chat_stream_text_parts(payload))
+            new_text_parts = self._extract_chat_stream_text_parts(payload)
+            for part in new_text_parts:
+                text_size += len(part)
+                if text_size > AI_STREAM_TEXT_MAX_CHARS:
+                    raise AICompatibilityError("AI 流式返回文本过大，已停止解析")
+            text_parts.extend(new_text_parts)
+            diagnostics.extend(self._extract_chat_stream_diagnostics(payload))
 
         aggregated_text = "".join(text_parts).strip()
         if aggregated_text:
@@ -433,6 +497,9 @@ class AISearchService:
             }
 
         if has_event_payload:
+            diagnostic_message = self._format_chat_stream_empty_diagnostic(diagnostics)
+            if diagnostic_message:
+                raise AIEmptyResponseError(diagnostic_message)
             raise AIEmptyResponseError("Chat 流式返回成功，但没有拼接出可用文本")
         raise AICompatibilityError("Chat 流式返回格式异常，未收到可解析的事件数据")
 
@@ -440,7 +507,7 @@ class AISearchService:
         if not isinstance(payload, dict):
             return ""
 
-        for key in ("text", "part", "item", "response", "output_text", "output"):
+        for key in ("text", "content", "message", "part", "item", "response", "output_text", "output"):
             if key not in payload:
                 continue
             text = self._coerce_content_to_text(payload.get(key))
@@ -451,6 +518,7 @@ class AISearchService:
     def _parse_responses_sse_response(self, response: requests.Response) -> dict:
         delta_parts: List[str] = []
         snapshot_text = ""
+        text_size = 0
         final_response: Optional[Dict[str, Any]] = None
         has_event_payload = False
 
@@ -460,11 +528,16 @@ class AISearchService:
             if payload_type.endswith(".delta"):
                 delta_text = self._coerce_stream_content_to_text(payload.get("delta"))
                 if delta_text:
+                    text_size += len(delta_text)
+                    if text_size > AI_STREAM_TEXT_MAX_CHARS:
+                        raise AICompatibilityError("AI 流式返回文本过大，已停止解析")
                     delta_parts.append(delta_text)
                     continue
 
             snapshot_candidate = self._extract_responses_sse_snapshot_text(payload)
             if snapshot_candidate:
+                if len(snapshot_candidate) > AI_STREAM_TEXT_MAX_CHARS:
+                    raise AICompatibilityError("AI 流式返回文本过大，已停止解析")
                 snapshot_text = snapshot_candidate
 
             response_payload = payload.get("response")
@@ -779,13 +852,96 @@ class AISearchService:
                 if text:
                     parts.append(text)
 
-        output_text = self._coerce_stream_content_to_text(payload.get("output_text"))
-        if output_text:
-            parts.append(output_text)
+        payload_type = str(payload.get("type") or "")
+        is_text_delta_event = payload_type in {
+            "response.output_text.delta",
+            "response.text.delta",
+        }
+        if is_text_delta_event:
+            delta_text = self._coerce_stream_content_to_text(payload.get("delta"))
+            if delta_text:
+                parts.append(delta_text)
+
+        root_keys = ("message", "output_text", "text", "content", "output")
+        if not is_text_delta_event:
+            root_keys = ("delta",) + root_keys
+
+        for key in root_keys:
+            if key not in payload:
+                continue
+            root_text = self._coerce_stream_content_to_text(payload.get(key))
+            if root_text:
+                parts.append(root_text)
 
         return parts
 
-    def _coerce_stream_content_to_text(self, content: Any) -> str:
+    def _extract_chat_stream_diagnostics(self, payload: Dict[str, Any]) -> List[str]:
+        diagnostics: List[str] = []
+
+        def append_reasoning_diagnostic(container: Any) -> None:
+            if not isinstance(container, dict):
+                return
+            reasoning_text = ""
+            for key in ("reasoning_content", "reasoning", "thinking_content", "thinking"):
+                reasoning_text = self._coerce_stream_content_to_text(container.get(key))
+                if reasoning_text:
+                    break
+            if reasoning_text:
+                diagnostics.append("reasoning_only")
+
+            refusal_text = self._coerce_stream_content_to_text(container.get("refusal"))
+            if refusal_text:
+                diagnostics.append(f"refusal:{self._truncate_text(refusal_text, 80)}")
+
+            if container.get("tool_calls") or container.get("function_call"):
+                diagnostics.append("tool_calls_only")
+
+        choices = payload.get("choices")
+        if isinstance(choices, list):
+            if not choices and payload.get("usage"):
+                diagnostics.append("usage_only")
+            for choice in choices:
+                if not isinstance(choice, dict):
+                    continue
+                append_reasoning_diagnostic(choice.get("delta"))
+                append_reasoning_diagnostic(choice.get("message"))
+                finish_reason = self._coerce_stream_content_to_text(choice.get("finish_reason"))
+                if finish_reason:
+                    diagnostics.append(f"finish_reason:{finish_reason}")
+
+        append_reasoning_diagnostic(payload)
+        return diagnostics
+
+    def _format_chat_stream_empty_diagnostic(self, diagnostics: List[str]) -> str:
+        if not diagnostics:
+            return ""
+
+        unique_diagnostics = set(diagnostics)
+        if "reasoning_only" in unique_diagnostics:
+            length_markers = {"finish_reason:length", "finish_reason:max_tokens"}
+            if unique_diagnostics.intersection(length_markers):
+                return "Chat 流式返回了推理内容，但输出 token 已耗尽，未生成最终可解析文本；请提高最大输出 tokens、关闭深度思考/推理模式，或改用普通聊天模型。"
+            return "Chat 流式返回了推理内容，但没有生成最终可解析文本；请关闭仅推理/深度思考模式、提高最大输出 tokens，或改用会直接输出 JSON 的聊天模型。"
+        if "tool_calls_only" in unique_diagnostics:
+            return "Chat 流式只返回了工具调用，没有最终文本；当前功能需要模型直接输出 JSON 文本，请关闭工具调用或更换模型。"
+
+        refusal = next((item for item in diagnostics if item.startswith("refusal:")), "")
+        if refusal:
+            return f"Chat 流式返回了拒绝信息，但没有最终文本：{refusal.split(':', 1)[1]}"
+
+        return ""
+
+    def _coerce_stream_content_to_text(
+        self,
+        content: Any,
+        depth: int = 0,
+        node_counter: Optional[List[int]] = None,
+    ) -> str:
+        if node_counter is None:
+            node_counter = [0]
+        node_counter[0] += 1
+        if depth > AI_STREAM_CONTENT_MAX_DEPTH or node_counter[0] > AI_STREAM_CONTENT_MAX_NODES:
+            return ""
         if content is None:
             return ""
         if isinstance(content, str):
@@ -793,15 +949,20 @@ class AISearchService:
         if isinstance(content, (int, float, bool)):
             return str(content)
         if isinstance(content, list):
-            return "".join(
-                part
-                for part in (self._coerce_stream_content_to_text(item) for item in content)
-                if part
-            )
+            parts: List[str] = []
+            for item in content:
+                if node_counter[0] >= AI_STREAM_CONTENT_MAX_NODES:
+                    break
+                part = self._coerce_stream_content_to_text(item, depth + 1, node_counter)
+                if part:
+                    parts.append(part)
+            return "".join(parts)
         if isinstance(content, dict):
-            for key in ("text", "content", "delta", "output_text", "value"):
+            for key in ("text", "content", "delta", "output_text", "value", "parts", "message", "output"):
                 if key in content:
-                    text = self._coerce_stream_content_to_text(content.get(key))
+                    if node_counter[0] >= AI_STREAM_CONTENT_MAX_NODES:
+                        break
+                    text = self._coerce_stream_content_to_text(content.get(key), depth + 1, node_counter)
                     if text:
                         return text
             return ""
@@ -1324,7 +1485,7 @@ class AISearchService:
         ]
 
         try:
-            response = self._call_api(messages, max_tokens=300, expect_json=True)
+            response = self._call_api(messages, max_tokens=800, expect_json=True)
             content = self._extract_response_text(response)
             intent_result = self._parse_json_response(content)
             return self._normalize_intent_result(intent_result, user_query)
@@ -1342,7 +1503,7 @@ class AISearchService:
     ) -> dict:
         websites_with_scores: List[dict] = []
         for website in websites:
-            website_dict = website.copy() if isinstance(website, dict) else {
+            website_dict: Dict[str, Any] = website.copy() if isinstance(website, dict) else {
                 "id": website.id if hasattr(website, "id") else website.get("id"),
                 "title": website.title if hasattr(website, "title") else website.get("title", ""),
                 "description": website.description if hasattr(website, "description") else website.get("description", ""),
@@ -1660,7 +1821,7 @@ def create_ai_service_from_settings(
     settings,
     require_enabled: bool = False,
     task: Optional[str] = None,
-) -> Optional[AISearchService]:
+) -> Optional[Union[AISearchService, AIFailoverService]]:
     if require_enabled and not settings.ai_search_enabled:
         return None
 

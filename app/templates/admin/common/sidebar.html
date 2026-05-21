@@ -46,6 +46,15 @@
       </li>
 
       <li
+        class="sidebar-item {% if 'admin.extension_token' in request.endpoint %}active{% endif %}"
+      >
+        <a href="{{ url_for('admin.extension_token') }}" class="sidebar-link">
+          <i class="bi bi-puzzle"></i>
+          <span>Chrome 插件</span>
+        </a>
+      </li>
+
+      <li
         class="sidebar-item {% if 'admin.invitations' in request.endpoint %}active{% endif %}"
       >
         <a href="{{ url_for('admin.invitations') }}" class="sidebar-link">

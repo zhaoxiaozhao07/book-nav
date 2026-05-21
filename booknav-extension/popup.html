@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>添加书签</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="popup-header">
+        <div>
+          <h1>添加书签</h1>
+        </div>
+        <button class="icon-button" id="settingsBtn" type="button" title="设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z" />
+            <path d="M19.4 13.5c.1-.5.1-1 .1-1.5s0-1-.1-1.5l2-1.5-2-3.5-2.4 1a8.7 8.7 0 0 0-2.6-1.5L14 2h-4l-.4 3a8.7 8.7 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5A8.2 8.2 0 0 0 4.5 12c0 .5 0 1 .1 1.5l-2 1.5 2 3.5 2.4-1a8.7 8.7 0 0 0 2.6 1.5l.4 3h4l.4-3a8.7 8.7 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5Z" />
+          </svg>
+        </button>
+      </header>
+
+      <section class="connection-warning hidden" id="connectionWarning">
+        <strong>未配对插件</strong>
+        <span>请先到设置页填写服务地址和后台生成的 API Token。</span>
+      </section>
+
+      <form id="bookmarkForm" class="bookmark-form">
+        <label class="field">
+          <span>URL</span>
+          <input id="urlInput" type="url" placeholder="https://www.example.com" required />
+        </label>
+
+        <label class="field">
+          <span class="field-row"><span>链接名称</span><small id="titleCount">0/100</small></span>
+          <input id="titleInput" type="text" maxlength="100" placeholder="请输入链接名称" required />
+        </label>
+
+        <label class="field">
+          <span class="field-row"><span>链接描述</span><small id="descriptionCount">0/200</small></span>
+          <textarea id="descriptionInput" maxlength="200" rows="2" placeholder="请输入链接描述（可选）"></textarea>
+        </label>
+
+        <label class="field">
+          <span>所属分类</span>
+          <select id="categorySelect" required>
+            <option value="">选择或搜索分类</option>
+          </select>
+        </label>
+
+        <div class="visibility-row" role="radiogroup" aria-label="可见性">
+          <label class="visibility-option active" id="publicOption">
+            <input type="radio" name="visibility" value="public" checked />
+            <span class="radio-dot"></span>
+            <span class="visibility-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" /><path d="M3.6 9h16.8M3.6 15h16.8M12 3c2.2 2.4 3.3 5.4 3.3 9s-1.1 6.6-3.3 9M12 3c-2.2 2.4-3.3 5.4-3.3 9s1.1 6.6 3.3 9" /></svg>
+            </span>
+            <span><strong>公有</strong><small>所有人可见</small></span>
+          </label>
+          <label class="visibility-option" id="privateOption">
+            <input type="radio" name="visibility" value="private" />
+            <span class="radio-dot"></span>
+            <span class="visibility-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3" /><path d="M6 11h12v10H6z" /></svg>
+            </span>
+            <span><strong>私有</strong><small>仅自己可见</small></span>
+          </label>
+        </div>
+
+        <div class="status-message hidden" id="statusMessage"></div>
+
+        <div class="action-row">
+          <button class="secondary-button" id="saveBtn" type="submit">保存</button>
+          <button class="secondary-button ai-button" id="aiBtn" type="button">AI 分类</button>
+        </div>
+      </form>
+    </main>
+
+    <script src="lib/storage.js"></script>
+    <script src="lib/booknav.js"></script>
+    <script src="lib/ai.js"></script>
+    <script src="lib/page.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

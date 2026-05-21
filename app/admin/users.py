@@ -14,6 +14,31 @@ from app.admin.decorators import admin_required, superadmin_required
 from app.models import User, Website, OperationLog
 
 
+@bp.route('/extension-token', methods=['GET', 'POST'])
+@login_required
+def extension_token():
+    """Manage the current user's Chrome extension API token."""
+    new_token = None
+    if request.method == 'POST':
+        action = (request.form.get('action') or '').strip()
+        if action == 'generate':
+            new_token = current_user.issue_extension_api_token()
+            db.session.commit()
+            flash('插件 API Token 已生成，请立即复制保存。离开页面后将不再显示完整 Token。', 'success')
+        elif action == 'revoke':
+            current_user.clear_extension_api_token()
+            db.session.commit()
+            flash('插件 API Token 已吊销，已配对插件将无法继续访问。', 'success')
+        else:
+            flash('未知操作', 'danger')
+
+    return render_template(
+        'admin/extension_token.html',
+        title='Chrome 插件配对',
+        new_token=new_token
+    )
+
+
 @bp.route('/users')
 @login_required
 @superadmin_required

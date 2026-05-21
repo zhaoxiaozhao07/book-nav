@@ -1,0 +1,234 @@
+{% extends "admin/base.html" %}
+
+{% block admin_head %}
+<style>
+  .extension-token-page .hero-card {
+    border: 0;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #171717 0%, #3f3f46 100%);
+    color: #fff;
+    overflow: hidden;
+    box-shadow: 0 18px 45px rgba(23, 23, 23, 0.22);
+  }
+
+  .extension-token-page .hero-card .card-body {
+    padding: 2rem;
+  }
+
+  .extension-token-page .token-card {
+    border: 1px solid #e5e7eb;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  }
+
+  .extension-token-page .token-box {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.85rem;
+    border: 1px solid #d4d4d8;
+    border-radius: 12px;
+    background: #fafafa;
+  }
+
+  .extension-token-page .token-box code {
+    flex: 1;
+    overflow: auto;
+    white-space: nowrap;
+    color: #171717;
+    font-size: 0.9rem;
+  }
+
+  .extension-token-page .step-item {
+    display: flex;
+    gap: 0.75rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+  }
+
+  .extension-token-page .step-number {
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    background: #f5f5f5;
+    color: #171717;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    flex: 0 0 auto;
+  }
+
+  .extension-token-page .status-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1rem;
+  }
+
+  .extension-token-page .status-item {
+    padding: 1rem;
+    border-radius: 14px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+  }
+
+  .extension-token-page .status-label {
+    color: #64748b;
+    font-size: 0.85rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .extension-token-page .status-value {
+    color: #0f172a;
+    font-weight: 600;
+  }
+</style>
+{% endblock %}
+
+{% block admin_content %}
+<div class="extension-token-page">
+  <div class="card hero-card mb-4">
+    <div class="card-body d-flex flex-column flex-lg-row justify-content-between gap-4">
+      <div>
+        <p class="text-uppercase mb-2" style="letter-spacing: 0.12em; color: #d4af37;">BookNav Chrome Extension</p>
+        <h2 class="mb-3"><i class="bi bi-puzzle me-2"></i>Chrome 插件配对</h2>
+        <p class="mb-0 text-white-50">
+          为当前账号生成专属 API Token，插件将用它访问你的分类和新增书签。Token 只绑定当前用户，私有书签也会写入当前账号名下。
+        </p>
+      </div>
+      <div class="align-self-lg-center">
+        {% if current_user.extension_token_hash %}
+        <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">
+          <i class="bi bi-check-circle me-1"></i>已生成 Token
+        </span>
+        {% else %}
+        <span class="badge bg-warning-subtle text-warning border border-warning-subtle px-3 py-2">
+          <i class="bi bi-exclamation-circle me-1"></i>尚未生成 Token
+        </span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="card token-card">
+        <div class="card-body p-4">
+          <h4 class="mb-3">API Token</h4>
+          {% if new_token %}
+          <div class="alert alert-warning">
+            <strong>请立即复制：</strong>完整 Token 仅显示一次，刷新或离开页面后将无法再次查看。
+          </div>
+          <div class="token-box mb-3">
+            <code id="newToken">{{ new_token }}</code>
+            <button class="btn btn-dark" type="button" id="copyTokenBtn">
+              <i class="bi bi-clipboard me-1"></i>复制
+            </button>
+          </div>
+          {% else %}
+          <p class="text-muted">
+            出于安全考虑，后台只保存 Token 哈希。忘记 Token 时请吊销并重新生成。
+          </p>
+          {% endif %}
+
+          <div class="status-row mb-4">
+            <div class="status-item">
+              <div class="status-label">Token 前缀</div>
+              <div class="status-value">{{ current_user.extension_token_prefix or '未生成' }}</div>
+            </div>
+            <div class="status-item">
+              <div class="status-label">生成时间</div>
+              <div class="status-value">
+                {% if current_user.extension_token_created_at %}
+                {{ current_user.extension_token_created_at.strftime('%Y-%m-%d %H:%M') }}
+                {% else %}
+                -
+                {% endif %}
+              </div>
+            </div>
+            <div class="status-item">
+              <div class="status-label">最后使用</div>
+              <div class="status-value">
+                {% if current_user.extension_token_last_used_at %}
+                {{ current_user.extension_token_last_used_at.strftime('%Y-%m-%d %H:%M') }}
+                {% else %}
+                暂无记录
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2">
+            <form method="post">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <input type="hidden" name="action" value="generate" />
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-key me-1"></i>{% if current_user.extension_token_hash %}重新生成 Token{% else %}生成 Token{% endif %}
+              </button>
+            </form>
+            {% if current_user.extension_token_hash %}
+            <form method="post" onsubmit="return confirm('确定吊销当前 Token？已配对插件将立即失效。');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+              <input type="hidden" name="action" value="revoke" />
+              <button type="submit" class="btn btn-outline-danger">
+                <i class="bi bi-shield-x me-1"></i>吊销 Token
+              </button>
+            </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card token-card h-100">
+        <div class="card-body p-4">
+          <h4 class="mb-3">插件配置步骤</h4>
+          <div class="step-item">
+            <span class="step-number">1</span>
+            <div>在 Chrome 扩展页面加载仓库中的 <code>booknav-extension</code> 文件夹。</div>
+          </div>
+          <div class="step-item">
+            <span class="step-number">2</span>
+            <div>打开插件设置，填写 BookNav 地址，例如 <code>{{ request.host_url.rstrip('/') }}</code>。</div>
+          </div>
+          <div class="step-item">
+            <span class="step-number">3</span>
+            <div>粘贴本页生成的 API Token，点击“测试连接”完成配对。</div>
+          </div>
+          <div class="step-item mb-0">
+            <span class="step-number">4</span>
+            <div>在插件弹窗中保存当前页面，或使用 AI 分类推荐选择已有分类。</div>
+          </div>
+          <hr />
+          <p class="small text-muted mb-0">
+            安全提示：Token 等同于当前用户的插件访问凭证，请勿公开分享。AI 只能推荐已有分类，新分类仍需在后台“分类管理”中手动新增。
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block admin_scripts %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const copyBtn = document.getElementById("copyTokenBtn");
+    const tokenEl = document.getElementById("newToken");
+    if (!copyBtn || !tokenEl) return;
+
+    copyBtn.addEventListener("click", async function () {
+      try {
+        await navigator.clipboard.writeText(tokenEl.textContent.trim());
+        copyBtn.innerHTML = '<i class="bi bi-check2 me-1"></i>已复制';
+        setTimeout(() => {
+          copyBtn.innerHTML = '<i class="bi bi-clipboard me-1"></i>复制';
+        }, 1800);
+      } catch (error) {
+        alert("复制失败，请手动选中 Token 后复制");
+      }
+    });
+  });
+</script>
+{% endblock %}
